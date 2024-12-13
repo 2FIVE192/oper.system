@@ -83,11 +83,18 @@ int main() {
 
     int client_fd = -1;
     fd_set read_fds;
-    sigset_t sigmask, empty_mask;
+    sigset_t blockedMask, origMask, emptyMask;
 
-    sigemptyset(&sigmask);
-    sigaddset(&sigmask, SIGHUP);
-    sigemptyset(&empty_mask);
+    sigemptyset(&blockedMask);
+    sigaddset(&blockedMask, SIGHUP);
+
+    if (sigprocmask(SIG_BLOCK, &blockedMask, &origMask) == -1) {
+        perror("sigprocmask");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    sigemptyset(&emptyMask);
 
     while (1) {
         FD_ZERO(&read_fds);
@@ -98,7 +105,7 @@ int main() {
 
         int max_fd = (client_fd > server_fd ? client_fd : server_fd);
 
-        int ready = pselect(max_fd + 1, &read_fds, NULL, NULL, NULL, &empty_mask);
+        int ready = pselect(max_fd + 1, &read_fds, NULL, NULL, NULL, &emptyMask);
         if (ready == -1) {
             if (errno == EINTR) {
                 if (signal_received) {
@@ -144,6 +151,10 @@ int main() {
                 client_fd = -1;
             }
         }
+    }
+
+    if (sigprocmask(SIG_SETMASK, &origMask, NULL) == -1) {
+        perror("sigprocmask");
     }
 
     close(server_fd);
