@@ -1,8 +1,10 @@
-obj-m += lab3.o
-PWD := $(CURDIR)
+obj-m += tsu.o
+
+PWD := $(shell pwd)
+KDIR := /lib/modules/$(shell uname -r)/build
+
 all:
-        make -C\
-/lib/modules/$(shell uname -r)/build M=$(PWD) modules
+	make -C $(KDIR) M=$(PWD) modules
+
 clean:
-        make -C\
-/lib/modules/$(shell uname -r)/build M=$(PWD) clean
+	make -C $(KDIR) M=$(PWD) clean
