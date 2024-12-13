@@ -14,20 +14,30 @@
 #define BACKLOG 10
 #define BUFFER_SIZE 1024
 
-volatile sig_atomic_t signal_received = 0;
+volatile sig_atomic_t was_sighup = 0;
 
-void handle_signal(int sig) {
-    signal_received = sig;
+void handle_sighup(int sig) {
+    was_sighup = 1;
 }
 
-int setup_signal_handling() {
+int setup_signal_handling(sigset_t *orig_mask) {
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = handle_signal;
+    sa.sa_handler = handle_sighup;
+    sa.sa_flags = SA_RESTART;
     sigemptyset(&sa.sa_mask);
 
     if (sigaction(SIGHUP, &sa, NULL) == -1) {
         perror("sigaction");
+        return -1;
+    }
+
+    sigset_t blocked_mask;
+    sigemptyset(&blocked_mask);
+    sigaddset(&blocked_mask, SIGHUP);
+
+    if (sigprocmask(SIG_BLOCK, &blocked_mask, orig_mask) == -1) {
+        perror("sigprocmask");
         return -1;
     }
 
@@ -70,7 +80,8 @@ int setup_server_socket() {
 }
 
 int main() {
-    if (setup_signal_handling() == -1) {
+    sigset_t orig_mask;
+    if (setup_signal_handling(&orig_mask) == -1) {
         exit(EXIT_FAILURE);
     }
 
@@ -83,20 +94,9 @@ int main() {
 
     int client_fd = -1;
     fd_set read_fds;
-    sigset_t blockedMask, origMask, emptyMask;
+    int signal_or_connection_count = 0;
 
-    sigemptyset(&blockedMask);
-    sigaddset(&blockedMask, SIGHUP);
-
-    if (sigprocmask(SIG_BLOCK, &blockedMask, &origMask) == -1) {
-        perror("sigprocmask");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-
-    sigemptyset(&emptyMask);
-
-    while (1) {
+    while (signal_or_connection_count < 3) {
         FD_ZERO(&read_fds);
         FD_SET(server_fd, &read_fds);
         if (client_fd != -1) {
@@ -105,12 +105,12 @@ int main() {
 
         int max_fd = (client_fd > server_fd ? client_fd : server_fd);
 
-        int ready = pselect(max_fd + 1, &read_fds, NULL, NULL, NULL, &emptyMask);
-        if (ready == -1) {
+        if (pselect(max_fd + 1, &read_fds, NULL, NULL, NULL, &orig_mask) == -1) {
             if (errno == EINTR) {
-                if (signal_received) {
-                    printf("Signal received: %d\n", signal_received);
-                    signal_received = 0;
+                if (was_sighup) {
+                    printf("SIGHUP received.\n");
+                    was_sighup = 0;
+                    signal_or_connection_count++;
                 }
                 continue;
             } else {
@@ -149,11 +149,12 @@ int main() {
                 printf("Client disconnected\n");
                 close(client_fd);
                 client_fd = -1;
+                signal_or_connection_count++;
             }
         }
     }
 
-    if (sigprocmask(SIG_SETMASK, &origMask, NULL) == -1) {
+    if (sigprocmask(SIG_SETMASK, &orig_mask, NULL) == -1) {
         perror("sigprocmask");
     }
 
