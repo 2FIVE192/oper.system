@@ -26,49 +26,48 @@ static int days_until_chinese_new_year(void) {
     time64_t cny_seconds;
     s64 diff;
 
-    // Получаем текущее время
+    
     ktime_get_real_ts64(&current_time);
 
-    // Преобразуем дату Нового года в секунды с эпохи Unix
     cny_seconds = mktime64(cny_date.tm_year, cny_date.tm_mon + 1, cny_date.tm_mday,
                            cny_date.tm_hour, cny_date.tm_min, cny_date.tm_sec);
     cny_time.tv_sec = cny_seconds;
     cny_time.tv_nsec = 0;
 
-    // Разница в днях
+    
     diff = (cny_time.tv_sec - current_time.tv_sec) / 86400;
     return diff > 0 ? diff : 0; // Если разница отрицательная, возвращаем 0
 }
 
-// Функция чтения файла в /proc
+
 static ssize_t proc_read(struct file *file, char __user *buf, size_t count, loff_t *ppos) {
     char message[64];
     int days = days_until_chinese_new_year();
     int len;
 
-    // Формируем сообщение с вычислением оставшихся дней
+  
     len = snprintf(message, sizeof(message), "Days until Chinese New Year: %d\n", days);
 
-    // Если уже читали файл, возвращаем 0, чтобы сигнализировать конец файла
+    
     if (*ppos > 0 || count < len)
         return 0;
 
-    // Копируем данные в пространство пользователя
+   
     if (copy_to_user(buf, message, len))
         return -EFAULT;
 
-    *ppos = len; // Устанавливаем текущую позицию
+    *ppos = len; 
     return len;
 }
 
-// Файловые операции для файла в /proc
+
 static const struct proc_ops proc_file_ops = {
     .proc_read = proc_read,
 };
 
-// Инициализация модуля
+
 static int __init tsu_init(void) {
-    // Создаем файл в /proc
+    
     our_proc_file = proc_create(PROCFS_NAME, 0444, NULL, &proc_file_ops);
     if (!our_proc_file) {
         pr_err("Error: Could not initialize /proc/%s\n", PROCFS_NAME);
@@ -78,7 +77,7 @@ static int __init tsu_init(void) {
     return 0;
 }
 
-// Очистка модуля
+
 static void __exit tsu_exit(void) {
     proc_remove(our_proc_file); // Удаляем файл из /proc
 }
