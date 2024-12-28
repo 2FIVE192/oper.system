@@ -64,9 +64,8 @@ static ssize_t proc_read(struct file *file, char __user *buf, size_t count, loff
 }
 
 // Операции с файлом /proc
-static const struct file_operations proc_file_ops = {
-    .owner = THIS_MODULE,
-    .read = proc_read,
+static const struct proc_ops proc_file_ops = {
+    .proc_read = proc_read,
 };
 
 // Инициализация модуля
@@ -92,3 +91,4 @@ module_exit(tsu_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Илья");
 MODULE_DESCRIPTION("Модуль для вычисления дней до Китайского Нового года.");
+
